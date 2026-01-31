@@ -1,96 +1,62 @@
 import os
+import threading
 import time
-import logging
-from pybit.unified_trading import HTTP
-from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    ContextTypes,
-)
 
-# -----------------------------
-# 2️⃣ Logging (logs ለ Koyeb)
-# -----------------------------
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO,
-)
+from flask import Flask
+import telebot
 
-# -----------------------------
-# 3️⃣ Environment Variables
-# -----------------------------
-BYBIT_API_KEY = os.getenv("BYBIT_API_KEY")
-BYBIT_API_SECRET = os.getenv("BYBIT_API_SECRET")
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-TELEGRAM_ADMIN_ID = os.getenv("TELEGRAM_ADMIN_ID")
+# =========================
+# 1. ENVIRONMENT VARIABLES
+# =========================
+BOT_TOKEN = os.getenv("BOT_TOKEN")        # Telegram Bot Token
+ADMIN_ID = os.getenv("ADMIN_ID")          # Telegram Admin ID (number)
 
-if not all([BYBIT_API_KEY, BYBIT_API_SECRET, TELEGRAM_TOKEN, TELEGRAM_ADMIN_ID]):
-    raise ValueError("❌ Missing environment variables")
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN not found in environment variables")
 
-TELEGRAM_ADMIN_ID = int(TELEGRAM_ADMIN_ID)
+# =========================
+# 2. TELEGRAM BOT SETUP
+# =========================
+bot = telebot.TeleBot(BOT_TOKEN)
 
-# -----------------------------
-# 4️⃣ Bybit Session
-# -----------------------------
-bybit = HTTP(
-    api_key=BYBIT_API_KEY,
-    api_secret=BYBIT_API_SECRET,
-    testnet=False,  # True ካልፈለግክ real account
-)
-
-# -----------------------------
-# 5️⃣ Telegram Commands
-# -----------------------------
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != TELEGRAM_ADMIN_ID:
-        await update.message.reply_text("❌ You are not authorized")
-        return
-
-    await update.message.reply_text(
-        "✅ Super Bot Started\n\n"
-        "/balance - Check Bybit balance\n"
-        "/ping - Bot status"
+@bot.message_handler(commands=["start"])
+def start_message(message):
+    bot.reply_to(
+        message,
+        "✅ Bot is running on Koyeb (Free plan)\n\nSend any message."
     )
 
+@bot.message_handler(func=lambda message: True)
+def echo_all(message):
+    bot.reply_to(message, f"📩 You said:\n{message.text}")
 
-async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🏓 Bot is running")
+# =========================
+# 3. BOT RUNNER (BACKGROUND)
+# =========================
+def start_bot():
+    print("🤖 Telegram bot started...")
+    while True:
+        try:
+            bot.infinity_polling(skip_pending=True)
+        except Exception as e:
+            print("Bot error:", e)
+            time.sleep(5)
 
+# =========================
+# 4. FLASK WEB SERVER (FAKE WEB)
+# =========================
+app = Flask(__name__)
 
-async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != TELEGRAM_ADMIN_ID:
-        await update.message.reply_text("❌ You are not authorized")
-        return
+@app.route("/")
+def home():
+    return "✅ Bot is alive and running!"
 
-    try:
-        result = bybit.get_wallet_balance(accountType="UNIFIED")
-        usdt = result["result"]["list"][0]["totalWalletBalance"]
-
-        await update.message.reply_text(f"💰 Wallet Balance: {usdt} USDT")
-
-    except Exception as e:
-        await update.message.reply_text(f"❌ Error: {e}")
-
-
-# -----------------------------
-# 6️⃣ Main App
-# -----------------------------
-def main():
-    logging.info("🚀 Starting Super Bot...")
-
-    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("ping", ping))
-    app.add_handler(CommandHandler("balance", balance))
-
-    logging.info("🤖 Bot polling started")
-    app.run_polling()
-
-
-# -----------------------------
-# 7️⃣ Run
-# -----------------------------
+# =========================
+# 5. MAIN ENTRY POINT
+# =========================
 if __name__ == "__main__":
-    main()
+    # Run Telegram bot in background thread
+    threading.Thread(target=start_bot).start()
+
+    # Run Flask web server (required by Koyeb Free)
+    app.run(host="0.0.0.0", port=8000)
