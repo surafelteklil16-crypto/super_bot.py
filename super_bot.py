@@ -1,62 +1,37 @@
 import os
 import threading
-import time
-
-from flask import Flask
 import telebot
+from flask import Flask
 
-# =========================
-# 1. ENVIRONMENT VARIABLES
-# =========================
-BOT_TOKEN = os.getenv("BOT_TOKEN")        # Telegram Bot Token
-ADMIN_ID = os.getenv("ADMIN_ID")          # Telegram Admin ID (number)
+# ================= ENV =================
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+ADMIN_ID = os.getenv("TELEGRAM_ADMIN_ID")
 
 if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN not found in environment variables")
+    raise ValueError("TELEGRAM_BOT_TOKEN is not set")
 
-# =========================
-# 2. TELEGRAM BOT SETUP
-# =========================
 bot = telebot.TeleBot(BOT_TOKEN)
 
-@bot.message_handler(commands=["start"])
-def start_message(message):
-    bot.reply_to(
-        message,
-        "✅ Bot is running on Koyeb (Free plan)\n\nSend any message."
-    )
-
-@bot.message_handler(func=lambda message: True)
-def echo_all(message):
-    bot.reply_to(message, f"📩 You said:\n{message.text}")
-
-# =========================
-# 3. BOT RUNNER (BACKGROUND)
-# =========================
-def start_bot():
-    print("🤖 Telegram bot started...")
-    while True:
-        try:
-            bot.infinity_polling(skip_pending=True)
-        except Exception as e:
-            print("Bot error:", e)
-            time.sleep(5)
-
-# =========================
-# 4. FLASK WEB SERVER (FAKE WEB)
-# =========================
+# ================= FLASK APP =================
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "✅ Bot is alive and running!"
+    return "Bot is running 🚀"
 
-# =========================
-# 5. MAIN ENTRY POINT
-# =========================
+def run_flask():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
+
+# ================= TELEGRAM BOT =================
+@bot.message_handler(commands=["start"])
+def start(message):
+    bot.reply_to(message, "👋 Bot is alive and running!")
+
+def run_bot():
+    bot.infinity_polling(skip_pending=True)
+
+# ================= MAIN =================
 if __name__ == "__main__":
-    # Run Telegram bot in background thread
-    threading.Thread(target=start_bot).start()
-
-    # Run Flask web server (required by Koyeb Free)
-    app.run(host="0.0.0.0", port=8000)
+    threading.Thread(target=run_flask).start()
+    run_bot()
